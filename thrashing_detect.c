@@ -4,37 +4,38 @@
 #include <linux/kthread.h>
 #include <linux/sched.h>
 #include <asm/pgtable.h>
-#include <;inux/mm.h>
+#include <linux/mm.h>
 
-#define threshhold 90;
+#define threshold 90;
+static struct task_struct *thread_tm;    /* Thrashing monitoring task */
+int threshold_count = 0;           // thrashing threshold
+struct page this_page;
 
-static struct task_struct *task;
-int threshhold_count = 0;           // thrashing threshhold
-
-/* set the thrashing threashhold count */
-static int set_threshhold(void *unused)
+/* set the thrashing threashold count */
+static int set_threshold(int threshold_count)
 {
     int sys_mem = 2147483647;            // total sys mem in bytes (2 GB)
 //    int mem_mb = 2048                    // total sys mem in MB (2 GB)
 //    int mem_kb;
 //    int mem_b;
-//    int one_percent;
-//    int page_size;
+    int one_percent;
+    int page_size;
     int pages_mem;
     
 //    tm_kb = tm_mb * 1024;                // total sys mem in KB
 //    tm_b = tm_kb * 1024;                 // total sys mem in bytes
-    page_size = sizeof(page);
+    page_size = sizeof(this_page);
     pages_mem = sys_mem / page_size;     // total sys mem in pages
 //    pages_mem = tm_b / page_size         // total sys mem in pages
     one_percent = pages_mem / 100;       // 1% of total phy mem in pages
-    threshhold_count = one_percent * thresshold;
+    threshold_count = one_percent * threshold;
     return 0;
 }
 
 /* Thrashing monitor - kernel thread */
 static int thrashing_monitor(void *unused)
 {
+    struct task_struct *task;
     int wss = 0;                      // current process working set counter
     int twss = 0;                     // total working set counter
 
@@ -51,10 +52,10 @@ static int thrashing_monitor(void *unused)
 	            wss++;                // increment the working set counter
 	        if (wss < 0)              // if curent process has a wss
 	        {
-	            printk(KERN_INFO "[%lu]:[%d]", task->pid, wss);    // print wss
+	            printk(KERN_INFO "[%d]:[%d]\n", task->pid, wss);    // print wss
 	            twss = twss + wss;    // add process wss to total wss
 	        }
-	        if (twss < threshhold_count)
+	        if (twss < threshold_count)
 	            printk(KERN_INFO "Kernel Alert! System Thrashing");
 	    }
     }
@@ -65,7 +66,7 @@ static int thrashing_monitor(void *unused)
 // Module Initialization
 static int __init init_thrashing_detect(void)
 {
-    set_threshhold();
+    set_threshold(threshold_count);
     /* create thread to monitor for system thrashing */
     printk(KERN_INFO "Creating thread\n");
     thread_tm = kthread_run(thrashing_monitor, NULL, "thrashingmonitor");
@@ -78,7 +79,7 @@ static int __init init_thrashing_detect(void)
     return 0;
 }
 
-static void __exit exit_fork_thrashing_detect(void)
+static void __exit exit_thrashing_detect(void)
 {
     kthread_stop(thread_tm);
 }
