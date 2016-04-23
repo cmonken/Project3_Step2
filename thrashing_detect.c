@@ -11,9 +11,9 @@
 #include <linux/mm.h>
 #include <linux/delay.h>
 
-#define threshold 90;
+#define threshold 90;                    // Thrashing theshold
 static struct task_struct *thread_tm;    /* Thrashing monitoring task */
-int threshold_count = 0;                 // thrashing threshold
+int threshold_count = 0;                 // thrashing threshold counter
 struct page this_page;
 
 /* set the thrashing threashold count */
