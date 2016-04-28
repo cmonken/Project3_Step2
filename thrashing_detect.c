@@ -1,6 +1,5 @@
 /** TO DO **/
 /* add page table walk for each process */
-/* add get system memory size - should be in discussion boards */
 
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -11,29 +10,22 @@
 #include <linux/mm.h>
 #include <linux/delay.h>
 
-#define threshold 90;                    // Thrashing theshold
-static struct task_struct *thread_tm;    /* Thrashing monitoring task */
-int threshold_count = 0;                 // thrashing threshold counter
+#define threshold 90;                    // Thrashing theshold percentage
+static struct task_struct *thread_tm;    // Thrashing monitoring task
+int threshold_count = 0;                 // Thrashing threshold count
 struct page this_page;
 
 /* set the thrashing threashold count */
 static int set_threshold(int threshold_count)
 {
-    int sys_mem = 2147483647;            // total sys mem in bytes (2 GB)
-//    int mem_mb = 2048                    // total sys mem in MB (2 GB)
-//    int mem_kb;
-//    int mem_b;
     int one_percent;
-    int page_size;
     int pages_mem;
     
-//    tm_kb = tm_mb * 1024;                // total sys mem in KB
-//    tm_b = tm_kb * 1024;                 // total sys mem in bytes
-    page_size = sizeof(this_page);
-    pages_mem = sys_mem / page_size;     // total sys mem in pages
-//    pages_mem = tm_b / page_size         // total sys mem in pages
-    one_percent = pages_mem / 100;       // 1% of total phy mem in pages
+    printk(KERN_INFO "The system ram size is %lu pages\n", totalram_pages);
+    one_percent = (int) totalram_pages / 100;
+    printk(KERN_INFO "One percent of system ram is  %d pages\n", one_percent);
     threshold_count = one_percent * threshold;
+    printk(KERN_INFO "Thrashing threshold is %d pages\n", threshold_count);
     return 0;
 }
 
@@ -49,26 +41,37 @@ static int thrashing_monitor(void *unused)
         twss = 0;                     // reset total working set counter
         for_each_process(task)
 	    {
-	        wss = 0;                  // reset wss for the current task
-	        
-	        /**  walk process' page table  **/
-	        
-//	        if (pte_young(pte))       // if the pte was recently accessed
-	            wss++;                // increment the working set counter
-	        if (wss < 0)              // if curent process has a wss
-	        {
-	            printk(KERN_INFO "[%d]:[%d]\n", task->pid, wss);    // print wss
-	            twss = twss + wss;    // add process wss to total wss
-	        }
-	        if (twss < threshold_count)
-	            printk(KERN_INFO "Kernel Alert! System Thrashing");
-	    }
-	    msleep(1000);                 // thread should sleep for 1 second
+	        wss = 0;                  // reset current task working set counter
+
+/* curr->pte is place holder for the currently accessed pte during the page
+ * table walk.  It needs to be changed to properly access the current pte when
+ * adding the page talbe walk code.  The if statement checks if the current pte
+ * was read since last check, increments the process wss counter if so and then
+ * clears the accessed bit in preparation for the next check.
+ */
+	        /**  begin process page table walk  **/
+//	        if (pte_young(curr->pte))        // if curr pte was recently accessed
+//            {
+//                wss++;                     // increment the working set counter
+//                pte_makeold(curr->pte);    // clear the acessed bit 
+//            }
+            /**  end of page table walk  **/
+
+            if (wss < 0)              // if curent process has a wss
+            {
+                printk(KERN_INFO "[%d]:[%d]\n", task->pid, wss);    // print wss
+                twss = twss + wss;    // add process wss to total wss
+            }
+            if (twss < threshold_count)
+                printk(KERN_INFO "Kernel Alert! System Thrashing");
+        }
+        msleep(1000);                 // thread should sleep for 1 second
     }
     printk(KERN_INFO "Thrashing monitor thread stopping\n");
     do_exit(0);
     return 0;
 }
+
 // Module Initialization
 static int __init init_thrashing_detect(void)
 {
