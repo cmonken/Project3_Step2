@@ -11,21 +11,21 @@
 #include <linux/delay.h>
 
 #define threshold 90;                    // Thrashing theshold percentage
-static struct task_struct *thread_tm;    // Thrashing monitoring task
+static struct task_struct *thread_tm;    // Thrashing monitoring task pointer
 int threshold_count = 0;                 // Thrashing threshold count
 struct page this_page;
 
 /* set the thrashing threashold count */
 static int set_threshold(int threshold_count)
 {
-    int one_percent;
-    int pages_mem;
+    unsigned long one_percent;
+    unsigned long pages_mem;
     
     printk(KERN_INFO "The system ram size is %lu pages\n", totalram_pages);
-    one_percent = (int) totalram_pages / 100;
-    printk(KERN_INFO "One percent of system ram is  %d pages\n", one_percent);
+    one_percent = totalram_pages / 100;
+    printk(KERN_INFO "One percent of system ram is  %lu pages\n", one_percent);
     threshold_count = one_percent * threshold;
-    printk(KERN_INFO "Thrashing threshold is %d pages\n", threshold_count);
+    printk(KERN_INFO "Thrashing threshold is %lu pages\n", threshold_count);
     return 0;
 }
 
@@ -33,8 +33,8 @@ static int set_threshold(int threshold_count)
 static int thrashing_monitor(void *unused)
 {
     struct task_struct *task;
-    int wss = 0;                      // current process working set counter
-    int twss = 0;                     // total working set counter
+    unsigned long wss = 0;            // current process working set counter
+    unsigned long twss = 0;           // total working set counter
 
     while (!kthread_should_stop())
     {
@@ -59,7 +59,7 @@ static int thrashing_monitor(void *unused)
 
             if (wss < 0)              // if curent process has a wss
             {
-                printk(KERN_INFO "[%d]:[%d]\n", task->pid, wss);    // print wss
+                printk(KERN_INFO "[%d]:[%lu]\n", task->pid, wss);    // print wss
                 twss = twss + wss;    // add process wss to total wss
             }
             if (twss < threshold_count)
