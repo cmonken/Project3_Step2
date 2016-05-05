@@ -49,72 +49,61 @@ int ptep_test_and_clear_young(struct vm_area_struct *vma,
 /* Thrashing monitor - kernel thread */
 static int thrashing_monitor(void *unused)
 {
-    struct task_struct *p;
+    struct task_struct *task;
     pgd_t *pgd;
     pmd_t *pmd;
     pud_t *pud;
     pte_t *ptep;
     unsigned long wss = 0;            // current process working set counter
     unsigned long twss = 0;           // total working set counter
-    unsigned long va = 0;             // virtual address counter
+    unsigned long vr_addr = 0;        // virtual address counter
     int young = 0;                    // is page young indicator
 
     while (!kthread_should_stop())
     {
         twss = 0;                     // reset total working set counter
-        for_each_process(p)
+        for_each_process(task)
         {
             wss = 0;                  // reset current task working set counter
 //            printk(KERN_INFO "[%d]:\n", task->pid);    // test print statement
             if (p->mm != NULL)
             {
-/*                for ()
+                struct vma_area_struct *curr = p->mm->mmap;
+                for (vr_addr = curr->vm_start; vr_addr < curr->vm_end;
+                     vr_addr += PAGE_SIZE)
                 {
-                    for ()
-                    {
-                        for ()
-                        {
-                            for ()
-                            {
-                            
-                            }
-                        }
-                    }
-                }
-Loop over all entries in the processe's pgd (p->mm->pgd), from 0 to PTRS_PER_PGD
-For each valid pgd entry, loop over puds, from 0 to PTRS_PER_PUD
-For each valid pud entry, loop over all pmds, from 0 to PTRS_PER_PMD
-For each valid pmd entry, loop over all the ptes, from 0 to PTRS_PER_PTE
-For each valid pte, increment WSS if the pte is young.
-*/            
-            
-            
-                struct vm_area_struct *curr = p->mm->mmap;
-                for (va = curr->vm_start; va < curr->vm_end; va+=PAGE_SIZE)
-                {
-                    pgd = pgd_offset (p->mm, va);
-                    if (pgd_none(*pgd))
-                        break;
-                    pud = pud_offset (pgd, va);
-                    if (pud_none(*pud))
-                        break;
-                    pmd = pmd_offset (pud, va);
-                    if (pmd_none (*pmd))
-                        break;
-                    ptep = pte_offset_map (pmd, va);
-                    young = ptep_test_and_clear_young (curr, va, ptep);
-                    //if (young)          // if curr pte was recently accessed
-                    //    wss++;          // increment the working set counter
-                    if (pte_young(*ptep))
+                    //walk thru  page global directory
+                    pgd = pgd_offset (task->mm, vr_addr);
+                    if (pgd_none (*pgd) || unlikely (pgd_bad (*pgd)))
+                    {}
+//                        break;          // not found
+                    //walk thru page upper directory
+                    pud = pud_offset(pgd, vr_addr);
+                    if (pud_none (*pud) || unlikely (pud_bad (*pud)))
+                    {}
+//                        break;          // not found
+                    //walk thru page middle directory
+                    pmd = pmd_offset(pud, vr_addr);
+                    if (pmd_none (*pmd) || unlikely (pmd_bad (*pmd)))	
+                    {}
+//                        break;          // not found
+                    //walk thru page table entry
+                    ptep = pte_offset (pmd, vr_addr);
+                    //ptep = pte_offset_map_lock (task->mm, pmd, vr_addr, &ptl);
+//                    young = ptep_test_and_clear_young (curr, vr_addr, ptep);
+//                    if (young)          // if curr pte was recently accessed
+//                        wss++;          // increment the working set counter
+                    if (pte_young(*pte))
                     {
                         wss++;          // increment the working set counter
-                        pte_set(ptep, pte_mkold(*ptep));       // make pte old
+                        pte_set(pte, pte_mkold(*pte));       // make pte old
                     }
+                    //pte_unmap_unlock(ptep,ptl);
                 }
             }
             if (wss < 0)                     // if curent process has a wss
             {
-                printk(KERN_INFO "[%d]:[%lu]\n", p->pid, wss);   // print wss
+                printk(KERN_INFO "[%d]:[%lu]\n", task->pid, wss);   // print wss
                 twss += wss;           // add process wss to total wss
             }
             if (twss < threshold_count)
@@ -124,69 +113,6 @@ For each valid pte, increment WSS if the pte is young.
         msleep(1000);                        // thread should sleep for 1 second
 //      printk(KERN_INFO "Thread slept for 1 second");    // test print statment
     }
-
-
-/*
- * from class discussion board thread "Project 3 Step 2 hint":
- *  1. Go through every vma linked by mm_struct->mmap.
- *  2. For each vma, go through every virtual page frame from vma->vm_start
- *     to vma->vm_end.
- *  3. For each virtual page, use your code in task 1 to find the corresponding
- *     pte.
- *  4. If the pte is present, increment WSS if it is young, then clear the bit.
- */
-
-/*
- * loop over the processes using for_each_process()
- * get the process's mm_struct (p->mm)
- * If p->mm is not NULL, then:
- * Loop over all entries in the processe's pgd (p->mm->pgd), from 0 to PTRS_PER_PGD
- * For each valid pgd entry, loop over puds, from 0 to PTRS_PER_PUD
- * For each valid pud entry, loop over all pmds, from 0 to PTRS_PER_PMD
- * For each valid pmd entry, loop over all the ptes, from 0 to PTRS_PER_PTE
- * For each valid pte, increment WSS if the pte is young.
- * Increment TWSS by WSS
- * Output WSS
- * End loop, output TWSS
- */
-
-/* 
-if(task->mm != NULL)
-			{
-				struct vm_area_struct *temp = task->mm->mmap;
-				while(temp)
-				{
- 					if(temp->vm_flags & VM_IO){}
-					else
-					{
-						for(va = temp->vm_start; va < temp->vm_end; va+=PAGE_SIZE)
-						{
-				  			pgd = pgd_offset(task->mm,va);
-			 		  		if(pgd_none(*pgd))
-								break;
-							pud = pud_offset(pgd,va);
-							if(pud_none(*pud))
-								break;
-							pmd = pmd_offset(pud,va);
-							if(pmd_none(*pmd))
-								break;
-							ptep = pte_offset_map(pmd,va);
-							ret = 0;
-							if(pte_young(*ptep))
-							{
-								ret = test_and_clear_bit(_PAGE_BIT_ACCESSED,												(unsigned long *) &ptep->pte);
-								wss++;
-							}
-							if(ret)
-							{
-								pte_update(task->mm, va, ptep);
-							}
-							pte_unmap(ptep);
-						}
-					}
-					temp = temp->vm_next;
-				}
-*/
     printk(KERN_INFO "Thrashing monitor thread stopping\n");
     do_exit(0);
     return 0;
