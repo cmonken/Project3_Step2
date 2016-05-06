@@ -65,30 +65,51 @@ static int thrashing_monitor(void *unused)
         for_each_process(p)
         {
             wss = 0;                  // reset current task working set counter
-//            printk(KERN_INFO "[%d]:\n", task->pid);    // test print statement
+//            printk(KERN_INFO "[%d]:\n", p->pid);    // test print statement
             if (p->mm != NULL)
             {
-/*                for ()
+/*              // Loop over all entries in the processe's pgd (p->mm->pgd),
+                // from 0 to PTRS_PER_PGD
+                pgd = p->mm->pgd; 
+                for (pgd = 0; pgd < PTRS_PER_PGD; pgd++)
                 {
-                    for ()
+                    // For each valid pgd entry, loop over puds,
+                    // from 0 to PTRS_PER_PUD
+                    pud = ;
+                    for (pud = 0; pud < PTRS_PER_PUD; pud++)
                     {
-                        for ()
+                        // For each valid pud entry, loop over all pmds,
+                        // from 0 to PTRS_PER_PMD
+                        pmd = ;
+                        for (pmd = 0; pmd < PTRS_PER_PMD; pmd++)
                         {
-                            for ()
+                            // For each valid pmd entry, loop over all the ptes,
+                            // from 0 to PTRS_PER_PTE
+                            ptep = ;
+                            for (ptep = 0; ptep < PTRS_PER_PTE; ptep++)
                             {
-                            
+                                //  For each valid pte,
+                                //  increment WSS if the pte is young.
+                                if (pte_young(*ptep))
+                                {
+                                    wss++;  // increment the working set counter
+                                    pte_set(ptep, pte_mkold(*ptep)); //reset pte
+                                }
                             }
                         }
                     }
                 }
-Loop over all entries in the processe's pgd (p->mm->pgd), from 0 to PTRS_PER_PGD
-For each valid pgd entry, loop over puds, from 0 to PTRS_PER_PUD
-For each valid pud entry, loop over all pmds, from 0 to PTRS_PER_PMD
-For each valid pmd entry, loop over all the ptes, from 0 to PTRS_PER_PTE
-For each valid pte, increment WSS if the pte is young.
 */            
             
-            
+/*
+ * from class discussion board thread "Project 3 Step 2 hint":
+ *  1. Go through every vma linked by mm_struct->mmap.
+ *  2. For each vma, go through every virtual page frame from vma->vm_start
+ *     to vma->vm_end.
+ *  3. For each virtual page, use your code in task 1 to find the corresponding
+ *     pte.
+ *  4. If the pte is present, increment WSS if it is young, then clear the bit.
+ */
                 struct vm_area_struct *curr = p->mm->mmap;
                 for (va = curr->vm_start; va < curr->vm_end; va+=PAGE_SIZE)
                 {
@@ -126,34 +147,11 @@ For each valid pte, increment WSS if the pte is young.
     }
 
 
-/*
- * from class discussion board thread "Project 3 Step 2 hint":
- *  1. Go through every vma linked by mm_struct->mmap.
- *  2. For each vma, go through every virtual page frame from vma->vm_start
- *     to vma->vm_end.
- *  3. For each virtual page, use your code in task 1 to find the corresponding
- *     pte.
- *  4. If the pte is present, increment WSS if it is young, then clear the bit.
- */
-
-/*
- * loop over the processes using for_each_process()
- * get the process's mm_struct (p->mm)
- * If p->mm is not NULL, then:
- * Loop over all entries in the processe's pgd (p->mm->pgd), from 0 to PTRS_PER_PGD
- * For each valid pgd entry, loop over puds, from 0 to PTRS_PER_PUD
- * For each valid pud entry, loop over all pmds, from 0 to PTRS_PER_PMD
- * For each valid pmd entry, loop over all the ptes, from 0 to PTRS_PER_PTE
- * For each valid pte, increment WSS if the pte is young.
- * Increment TWSS by WSS
- * Output WSS
- * End loop, output TWSS
- */
 
 /* 
-if(task->mm != NULL)
+if(p->mm != NULL)
 			{
-				struct vm_area_struct *temp = task->mm->mmap;
+				struct vm_area_struct *temp = p->mm->mmap;
 				while(temp)
 				{
  					if(temp->vm_flags & VM_IO){}
@@ -161,7 +159,7 @@ if(task->mm != NULL)
 					{
 						for(va = temp->vm_start; va < temp->vm_end; va+=PAGE_SIZE)
 						{
-				  			pgd = pgd_offset(task->mm,va);
+				  			pgd = pgd_offset(p->mm,va);
 			 		  		if(pgd_none(*pgd))
 								break;
 							pud = pud_offset(pgd,va);
@@ -179,7 +177,7 @@ if(task->mm != NULL)
 							}
 							if(ret)
 							{
-								pte_update(task->mm, va, ptep);
+								pte_update(p->mm, va, ptep);
 							}
 							pte_unmap(ptep);
 						}
