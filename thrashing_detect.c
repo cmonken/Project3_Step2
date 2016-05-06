@@ -56,8 +56,8 @@ static int thrashing_monitor(void *unused)
     pte_t *ptep;
     unsigned long wss = 0;            // current process working set counter
     unsigned long twss = 0;           // total working set counter
-    unsigned long va = 0;             // virtual address counter
-    int young = 0;                    // is page young indicator
+    unsigned long vr_addr = 0;        // virtual address
+    //int young = 0;                    // is page young indicator
 
     while (!kthread_should_stop())
     {
@@ -111,26 +111,34 @@ static int thrashing_monitor(void *unused)
  *  4. If the pte is present, increment WSS if it is young, then clear the bit.
  */
                 struct vm_area_struct *curr = p->mm->mmap;
-                for (va = curr->vm_start; va < curr->vm_end; va+=PAGE_SIZE)
+                for (vr_addr = curr->vm_start; vr_addr < curr->vm_end;
+                     vr_addr+=PAGE_SIZE)
                 {
-                    pgd = pgd_offset (p->mm, va);
-                    if (pgd_none(*pgd))
-                        break;
-                    pud = pud_offset (pgd, va);
-                    if (pud_none(*pud))
-                        break;
-                    pmd = pmd_offset (pud, va);
-                    if (pmd_none (*pmd))
-                        break;
-                    ptep = pte_offset_map (pmd, va);
-                    young = ptep_test_and_clear_young (curr, va, ptep);
+                    //walk thru  page global directory
+                    pgd = pgd_offset (p->mm, vr_addr);
+                    if(pgd_none(*pgd)||unlikely(pgd_bad(*pgd)))
+                        return -1;
+                    //walk thru page upper directory
+                    pud = pud_offset (pgd,vr_addr);
+                    if(pud_none(*pud)||unlikely(pud_bad(*pud)))
+                        return -1;
+                    //walk thru page middle directory
+                    pmd = pmd_offset (pud,vr_addr);
+                    if(pmd_none(*pmd)||unlikely(pmd_bad(*pmd)))	
+                        return -1;
+                    //walk thru page table entry
+                    //ptep = pte_offset(pmd,vr_addr);
+                    ptep = pte_offset_map_lock (p->mm,pmd,vr_addr,&ptl);	
+                    //young = ptep_test_and_clear_young (curr, va, ptep);
                     //if (young)          // if curr pte was recently accessed
                     //    wss++;          // increment the working set counter
                     if (pte_young(*ptep))
                     {
                         wss++;          // increment the working set counter
                         pte_set(ptep, pte_mkold(*ptep));       // make pte old
+                        //pte_unmap(ptep);
                     }
+                    pte_unmap_unlock(ptep,ptl);
                 }
             }
             if (wss < 0)                     // if curent process has a wss
@@ -145,46 +153,6 @@ static int thrashing_monitor(void *unused)
         msleep(1000);                        // thread should sleep for 1 second
 //      printk(KERN_INFO "Thread slept for 1 second");    // test print statment
     }
-
-
-
-/* 
-if(p->mm != NULL)
-			{
-				struct vm_area_struct *temp = p->mm->mmap;
-				while(temp)
-				{
- 					if(temp->vm_flags & VM_IO){}
-					else
-					{
-						for(va = temp->vm_start; va < temp->vm_end; va+=PAGE_SIZE)
-						{
-				  			pgd = pgd_offset(p->mm,va);
-			 		  		if(pgd_none(*pgd))
-								break;
-							pud = pud_offset(pgd,va);
-							if(pud_none(*pud))
-								break;
-							pmd = pmd_offset(pud,va);
-							if(pmd_none(*pmd))
-								break;
-							ptep = pte_offset_map(pmd,va);
-							ret = 0;
-							if(pte_young(*ptep))
-							{
-								ret = test_and_clear_bit(_PAGE_BIT_ACCESSED,												(unsigned long *) &ptep->pte);
-								wss++;
-							}
-							if(ret)
-							{
-								pte_update(p->mm, va, ptep);
-							}
-							pte_unmap(ptep);
-						}
-					}
-					temp = temp->vm_next;
-				}
-*/
     printk(KERN_INFO "Thrashing monitor thread stopping\n");
     do_exit(0);
     return 0;
